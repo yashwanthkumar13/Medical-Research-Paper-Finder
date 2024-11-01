@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Medical Research Paper Finder</title>
+    <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+    <div class="container">
+        <h1>Medical Research Paper Finder</h1>
+
+        <!-- Text Input Form -->
+        <form id="search-form">
+            <label for="query">Enter the medical domain you're researching or use voice input:</label>
+            <input type="text" id="query" name="query" placeholder="e.g., Cancer, Diabetes" required>
+            <button type="submit">Search</button>
+        </form>
+
+        <!-- Voice Input Button -->
+        <button id="voice-btn">🎤 Speak</button>
+        <p id="voice-status"></p>
+
+        <div id="results"></div>
+    </div>
+
+    <script>
+        // JavaScript to handle text input form submission
+        const form = document.getElementById('search-form');
+        form.addEventListener('submit', function(event) {
+            event.preventDefault();
+            const query = document.getElementById('query').value;
+            sendQuery(query);
+        });
+
+        // Function to send query to the Flask server
+        function sendQuery(query) {
+            fetch('/search', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded'
+                },
+                body: `query=${encodeURIComponent(query)}`
+            })
+            .then(response => response.json())
+            .then(data => {
+                const resultsDiv = document.getElementById('results');
+                resultsDiv.innerHTML = ''; // Clear previous results
+
+                if (data.error) {
+                    resultsDiv.innerHTML = `<p>${data.error}</p>`;
+                } else {
+                    data.forEach((paper, index) => {
+                        const paperDiv = document.createElement('div');
+                        paperDiv.classList.add('paper');
+                        paperDiv.innerHTML = `
+                            <h2>Paper ${index + 1}: ${paper.title}</h2>
+                            <p><strong>Summary:</strong> ${paper.summary}</p>
+                            <p><a href="${paper.link}" target="_blank">Read more</a></p>
+                            <p><strong>Source:</strong> ${paper.source}</p>
+                        `;
+                        resultsDiv.appendChild(paperDiv);
+                    });
+                }
+            });
+        }
+
+        // Web Speech API to handle voice input
+        const voiceBtn = document.getElementById('voice-btn');
+        const voiceStatus = document.getElementById('voice-status');
+        const recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
+
+        recognition.onstart = function() {
+            voiceStatus.textContent = "Listening...";
+        };
+
+        recognition.onspeechend = function() {
+            voiceStatus.textContent = "Processing...";
+            recognition.stop();
+        };
+
+        recognition.onresult = function(event) {
+            const transcript = event.results[0][0].transcript;
+            document.getElementById('query').value = transcript;
+            sendQuery(transcript);
+            voiceStatus.textContent = "";
+        };
+
+        voiceBtn.addEventListener('click', () => {
+            recognition.start();
+        });
+    </script>
+</body>
+</html>
