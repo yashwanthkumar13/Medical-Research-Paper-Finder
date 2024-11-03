@@ -1,32 +1,46 @@
 from flask import Flask, render_template, request, jsonify
+from textblob import TextBlob
 import requests
 import xml.etree.ElementTree as ET
 
-app = Flask(__name__)
+app = Flask(_name_)
 
 # PubMed API URLs
 PUBMED_SEARCH_URL = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi"
 PUBMED_SUMMARY_URL = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi"
 PUBMED_FETCH_URL = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi"
 
-def search_pubmed(query):
+def calculate_rating(text):
+    """Calculate a rating based on the sentiment polarity of the text."""
+    polarity = TextBlob(text).sentiment.polarity
+    # Map polarity (-1 to 1) to a 1 to 5 scale
+    if polarity >= 0.6:
+        return 5
+    elif polarity >= 0.2:
+        return 4
+    elif polarity >= -0.2:
+        return 3
+    elif polarity >= -0.6:
+        return 2
+    else:
+        return 1
+
+def search_pubmed(query, count=10):
     """Searches PubMed for research papers based on the query and retrieves paper summaries."""
     params = {
         "db": "pubmed",
         "term": query,
-        "retmax": 10,  # Limit the results to 10 papers
+        "retmax": count,
         "retmode": "xml"
     }
     response = requests.get(PUBMED_SEARCH_URL, params=params)
     
-    # Parse XML response to get list of IDs
     root = ET.fromstring(response.content)
     ids = [id_elem.text for id_elem in root.findall(".//Id")]
     
     if not ids:
         return []
     
-    # Fetch summary information for each paper ID
     summary_params = {
         "db": "pubmed",
         "id": ",".join(ids),
@@ -41,7 +55,6 @@ def search_pubmed(query):
         title = docsum.find("Item[@Name='Title']").text
         source = docsum.find("Item[@Name='Source']").text
         
-        # Fetch abstract and summary using PubMed efetch
         fetch_params = {
             "db": "pubmed",
             "id": paper_id,
@@ -50,9 +63,10 @@ def search_pubmed(query):
         fetch_response = requests.get(PUBMED_FETCH_URL, params=fetch_params)
         fetch_root = ET.fromstring(fetch_response.content)
         
-        # Check if AbstractText is available
         abstract_element = fetch_root.find(".//Abstract/AbstractText")
         abstract = abstract_element.text if abstract_element is not None else "No abstract available."
+        
+        rating = calculate_rating(abstract)
         
         link = f"https://pubmed.ncbi.nlm.nih.gov/{paper_id}/"
         
@@ -60,7 +74,8 @@ def search_pubmed(query):
             "title": title,
             "summary": abstract,
             "link": link,
-            "source": source
+            "source": source,
+            "rating": rating
         })
     
     return papers
@@ -72,12 +87,13 @@ def index():
 @app.route('/search', methods=['POST'])
 def search():
     query = request.form['query']
-    papers = search_pubmed(query)
+    count = int(request.form.get('count', 10))  # Default to 10 if not specified
+    papers = search_pubmed(query, count)
     
     if papers:
         return jsonify(papers)
     else:
         return jsonify({"error": "No research papers found for your query."})
 
-if __name__ == "__main__":
+if _name_ == "_main_":
     app.run(debug=True)
