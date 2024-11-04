@@ -3,7 +3,7 @@ from textblob import TextBlob
 import requests
 import xml.etree.ElementTree as ET
 
-app = Flask(_name_)
+app = Flask(__name__)
 
 # PubMed API URLs
 PUBMED_SEARCH_URL = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi"
@@ -35,6 +35,9 @@ def search_pubmed(query, count=10):
     }
     response = requests.get(PUBMED_SEARCH_URL, params=params)
     
+    if response.status_code != 200:
+        return []  # Handle API errors by returning an empty list
+
     root = ET.fromstring(response.content)
     ids = [id_elem.text for id_elem in root.findall(".//Id")]
     
@@ -47,6 +50,10 @@ def search_pubmed(query, count=10):
         "retmode": "xml"
     }
     summary_response = requests.get(PUBMED_SUMMARY_URL, params=summary_params)
+    
+    if summary_response.status_code != 200:
+        return []  # Handle API errors by returning an empty list
+
     summary_root = ET.fromstring(summary_response.content)
     
     papers = []
@@ -61,6 +68,10 @@ def search_pubmed(query, count=10):
             "retmode": "xml"
         }
         fetch_response = requests.get(PUBMED_FETCH_URL, params=fetch_params)
+        
+        if fetch_response.status_code != 200:
+            continue  # Skip this paper if fetching fails
+        
         fetch_root = ET.fromstring(fetch_response.content)
         
         abstract_element = fetch_root.find(".//Abstract/AbstractText")
@@ -95,5 +106,5 @@ def search():
     else:
         return jsonify({"error": "No research papers found for your query."})
 
-if _name_ == "_main_":
+if __name__ == "__main__":
     app.run(debug=True)
